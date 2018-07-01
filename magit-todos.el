@@ -123,6 +123,12 @@ This should be set automatically by customizing
 Used to avoid running multiple simultaneous scans for a
 magit-status buffer.")
 
+(defvar magit-todos-section-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "jT" #'magit-todos-jump-to-todos)
+    map)
+  "Keymap for `magit-todos' top-level section.")
+
 (defvar magit-todos-item-section-map
   (let ((map (make-sparse-keymap)))
     (define-key map [remap magit-visit-thing] #'magit-todos-jump-to-item)
@@ -415,7 +421,7 @@ used."
       (progn
         (if (lookup-key magit-status-mode-map "jT")
             (message "magit-todos: Not overriding bind of \"jT\" in `magit-status-mode-map'.")
-          (define-key magit-status-mode-map "jT" #'magit-jump-to-todos))
+          (define-key magit-status-mode-map "jT" #'magit-todos-jump-to-todos))
         (magit-add-section-hook 'magit-status-sections-hook
                                 #'magit-todos--insert-items
                                 'magit-insert-staged-changes
@@ -455,11 +461,30 @@ If PEEK is non-nil, keep focus in status buffer window."
   (interactive)
   (magit-todos-jump-to-item 'peek))
 
+;;;;; Jump to section
+
+(magit-define-section-jumper magit-jump-to-todos "TODOs" todos)
+
+(defun magit-todos-jump-to-todos ()
+  "Jump to TODOs section, and update it if empty."
+  (interactive)
+  (let ((already-in-section (magit-section-match [* todos])))
+    (magit-jump-to-todos)
+    (when (or
+           ;; Cached and forcing update
+           (and already-in-section
+                (integerp magit-todos-update))
+           ;; Manual updates
+           (not magit-todos-update)
+           ;; Section is empty
+           (= 0 (length (oref (magit-current-section) children))))
+      (magit-todos-update))))
+
 ;;;; Functions
 
 (defun magit-todos--delete-section (condition)
   "Delete the section specified by CONDITION from the Magit status buffer.
-See `magit-section-match'."
+See `magit-section-match'.  Also delete it from root section's children."
   (save-excursion
     (goto-char (point-min))
     (when-let ((section (cl-loop until (magit-section-match condition)
@@ -467,6 +492,9 @@ See `magit-section-match'."
                                  ;; sometimes it skips our section.
                                  do (forward-line 1)
                                  finally return (magit-current-section))))
+      ;; Delete the section from root section's children.  This makes the section-jumper command
+      ;; work when a replacement section is inserted after deleting this section.
+      (object-remove-from-list magit-root-section 'children section)
       (with-slots (start end) section
         ;; NOTE: We delete 1 past the end because we insert a newline after the section.  I'm not
         ;; sure if this would generalize to all Magit sections.
@@ -506,7 +534,8 @@ This function should be called from inside a ‘magit-status’ buffer."
          ;; Manual and updating now
          (and 'nil (guard magit-todos-updating))
          ;; Caching and cache expired
-         (and (pred integerp) (guard (or (>= (float-time
+         (and (pred integerp) (guard (or magit-todos-updating  ; Forced update
+                                         (>= (float-time
                                               (time-subtract (current-time)
                                                              magit-todos-last-update-time))
                                              magit-todos-update)
@@ -545,7 +574,8 @@ This function should be called from inside a ‘magit-status’ buffer."
       ;; Don't try to select a killed status buffer
       (with-current-buffer magit-status-buffer
         (when magit-todos-updating
-          (when (integerp magit-todos-update)
+          (when (or (null magit-todos-update) ; Manual updates
+                    (integerp magit-todos-update)) ; Caching
             (setq magit-todos-item-cache items)
             (setq magit-todos-last-update-time (current-time)))
           ;; HACK: I don't like setting this special var, but it works.  See other comment where
@@ -615,7 +645,7 @@ sections."
     (if (and (consp group-fns)
              (> (length group-fns) 0))
         ;; Insert more sections
-        (aprog1  ; `aprog1' is really handy here.
+        (aprog1                         ; `aprog1' is really handy here.
             (magit-insert-section ((eval type))
               (magit-insert-heading heading)
               (cl-loop for (group-type . items) in (-group-by (car group-fns) items)
@@ -633,7 +663,10 @@ sections."
                             :group-fns (cdr group-fns)
                             :depth (+ 2 depth)
                             :items items)))
-          (magit-todos--set-visibility :depth depth :num-items (length items) :section it))
+          (magit-todos--set-visibility :depth depth :num-items (length items) :section it)
+          ;; Add top-level section to root section's children
+          (when (= 0 depth)
+            (push it (oref magit-root-section children))))
       ;; Insert individual to-do items
       (let ((width (window-text-width)))
         (aprog1
@@ -998,10 +1031,6 @@ This is a copy of `async-start-process' that does not override
   "Return non-nil if A's filename is `string<' B's."
   (string< (magit-todos-item-filename a)
            (magit-todos-item-filename b)))
-
-;;;;; Jump to section
-
-(magit-define-section-jumper magit-jump-to-todos "TODOs" todos)
 
 ;;;; Footer
 
