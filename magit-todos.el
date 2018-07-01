@@ -558,25 +558,25 @@ This function should be called from inside a ‘magit-status’ buffer."
             ('bottom (goto-char (point-max)))
             (_ (magit-todos--skip-section (vector '* magit-todos-insert-at))))
           ;; Insert section
-          (if (not items)
-              (unless magit-todos-update
-                ;; When -update is non-nil, no items means nothing to show.  When nil, show message
-                ;; to indicate updating must be done manually.
-                (let ((magit-insert-section--parent magit-root-section)
-                      (message (if magit-todos-updating
-                                   "0"
-                                 "update manually")))
-                  (magit-insert-section (todos)
-                    (magit-insert-heading (format "TODOs (%s)" message)))
-                  (insert "\n")))
-            (aprog1
-                (magit-todos--insert-group :type 'todos
-                  :heading (format "TODOs (%s)" num-items)
-                  :group-fns group-fns
-                  :items items
-                  :depth 0)
-              (insert "\n")
-              (magit-todos--set-visibility :section it :num-items num-items))))))))
+          (let ((reminder (if magit-todos-update
+                              "" ; Automatic updates: no reminder
+                            ;; Manual updates: remind user
+                            " (update manually)")))
+            (if (not items)
+                (unless magit-todos-update
+                  ;; Manual updates: Insert section to remind user
+                  (let ((magit-insert-section--parent magit-root-section))
+                    (magit-insert-section (todos)
+                      (magit-insert-heading (concat "TODOs (0)" reminder)))
+                    (insert "\n")))
+              (aprog1
+                  (magit-todos--insert-group :type 'todos
+                    :heading (format "TODOs (%s)%s" num-items reminder)
+                    :group-fns group-fns
+                    :items items
+                    :depth 0)
+                (insert "\n")
+                (magit-todos--set-visibility :section it :num-items num-items)))))))))
 
 (cl-defun magit-todos--insert-group (&key depth group-fns heading type items)
   "Insert ITEMS into grouped Magit section and return the section.
