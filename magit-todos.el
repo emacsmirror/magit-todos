@@ -154,11 +154,14 @@ A time value as returned by `current-time'.")
 
 (defcustom magit-todos-update t
   "When or how often to scan for to-dos.
-The list can be updated manually by calling
-`magit-todos-update'."
-  :type '(choice (const :tag "Always" t)
-                 (const :tag "Manually" nil)
-                 (integer :tag "When N seconds have passed since last scanning")))
+When set to manual updates, the list can be updated with the
+`magit-todos-update' command.  When caching is enabled, scan for
+items whenever the Magit status buffer is refreshed and at least
+N seconds have passed since the last scan; otherwise, use cached
+items."
+  :type '(choice (const :tag "Automatically, when the Magit status buffer is refreshed" t)
+                 (integer :tag "Automatically, but cache items for N seconds")
+                 (const :tag "Manually" nil)))
 
 (defcustom magit-todos-fontify-keyword-headers t
   "Apply keyword faces to group keyword headers."
