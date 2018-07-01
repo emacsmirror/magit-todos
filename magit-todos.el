@@ -432,9 +432,6 @@ Only necessary when `magit-todos-update' is nil."
   (interactive)
   (let ((inhibit-read-only t))
     (magit-todos--delete-section [* todos])
-    ;; HACK: I don't like setting a special var here, because it seems like lexically binding a
-    ;; special var should follow down the chain, but it isn't working, so we'll do this.
-    (setq magit-todos-updating t)
     (magit-todos--insert-items)))
 
 (defun magit-todos-jump-to-item (&optional peek)
@@ -502,20 +499,24 @@ This function should be called from inside a ‘magit-status’ buffer."
       (when (buffer-live-p buffer)
         (kill-buffer buffer)))
     (setq magit-todos-active-scan nil))
-  (if (or magit-todos-updating
-          (pcase magit-todos-update
-            ((pred integerp)
-             (>= (float-time (time-subtract (current-time)
-                                            magit-todos-last-update-time))
-                 magit-todos-update))
-            ('t t)))
-      ;; Scan and insert
-      (setq magit-todos-active-scan (funcall magit-todos-scan-fn
-                                             :magit-status-buffer (current-buffer)
-                                             :directory default-directory
-                                             :depth magit-todos-depth))
-    ;; Use cache
-    (magit-todos--insert-items-callback (current-buffer) magit-todos-item-cache)))
+  (pcase magit-todos-update
+    ((or 't  ; Automatic
+         ;; Caching and cache expired
+         (and (pred integerp) (guard (or (>= (float-time
+                                              (time-subtract (current-time)
+                                                             magit-todos-last-update-time))
+                                             magit-todos-update)
+                                         (null magit-todos-last-update-time)))))
+     ;; Scan and insert.
+     ;; HACK: I don't like setting a special var here, because it seems like lexically binding a
+     ;; special var should follow down the chain, but it isn't working, so we'll do this.
+     (setq magit-todos-updating t)
+     (setq magit-todos-active-scan (funcall magit-todos-scan-fn
+                                            :magit-status-buffer (current-buffer)
+                                            :directory default-directory
+                                            :depth magit-todos-depth)))
+    (_  ; Caching and cache not expired, or not automatic and not manually updating now
+     (magit-todos--insert-items-callback (current-buffer) magit-todos-item-cache))))
 
 (defun magit-todos--insert-items-callback (magit-status-buffer items)
   "Insert to-do ITEMS into MAGIT-STATUS-BUFFER."
@@ -539,11 +540,10 @@ This function should be called from inside a ‘magit-status’ buffer."
     (when (buffer-live-p magit-status-buffer)
       ;; Don't try to select a killed status buffer
       (with-current-buffer magit-status-buffer
-        (when (or magit-todos-update
-                  magit-todos-updating)
-          ;; Update cache
-          (setq magit-todos-item-cache items)
-          (setq magit-todos-last-update-time (current-time))
+        (when magit-todos-updating
+          (when (integerp magit-todos-update)
+            (setq magit-todos-item-cache items)
+            (setq magit-todos-last-update-time (current-time)))
           ;; HACK: I don't like setting this special var, but it works.  See other comment where
           ;; it's set t.
           (setq magit-todos-updating nil))
