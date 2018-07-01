@@ -432,6 +432,8 @@ Only necessary when `magit-todos-update' is nil."
   (interactive)
   (let ((inhibit-read-only t))
     (magit-todos--delete-section [* todos])
+    ;; HACK: See other note on `magit-todos-updating'.
+    (setq magit-todos-updating t)
     (magit-todos--insert-items)))
 
 (defun magit-todos-jump-to-item (&optional peek)
@@ -501,6 +503,8 @@ This function should be called from inside a ‘magit-status’ buffer."
     (setq magit-todos-active-scan nil))
   (pcase magit-todos-update
     ((or 't  ; Automatic
+         ;; Manual and updating now
+         (and 'nil (guard magit-todos-updating))
          ;; Caching and cache expired
          (and (pred integerp) (guard (or (>= (float-time
                                               (time-subtract (current-time)
