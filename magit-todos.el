@@ -685,7 +685,7 @@ sections."
                                                        #'magit-todos--format-plain)
                                                      item))
                                     (truncate-string-to-width it (- width depth)))))
-                  (magit-insert-section (todo item)
+                  (magit-insert-section (todos-item item)
                     (insert string))
                   (insert "\n"))))
           (magit-todos--set-visibility :depth depth :num-items (length items) :section it))))))
