@@ -187,6 +187,16 @@ MAGIT-STATUS-BUFFER is what it says.  DIRECTORY is the directory in which to run
              :command command
              :finish-func (apply-partially #'magit-todos--scan-callback ,results-regexp magit-status-buffer)))))))
 
+(defun magit-todos--choose-scanner ()
+  "Return function to call to scan for items with.
+Chooses automatically in order defined in `magit-todos-scanners'."
+  ;; NOTE: This needs to be defined before the `defcustom' that uses it.
+  (--first
+   ;; I guess it would be better to avoid `eval', but it seems like the natural way to do this.
+   (when (eval (a-get it 'test))
+     (a-get it 'function))
+   magit-todos-scanners))
+
 (defcustom magit-todos-scanner nil
   "File scanning method.
 \"Automatic\" will attempt to use rg, ag, git-grep, and
@@ -194,11 +204,13 @@ find-grep, in that order. "
   :type '(choice (const :tag "Automatic" nil)
                  (function :tag "Custom function"))
   :set (lambda (option value)
-         (unless value
-           ;; Choosing automatically
-           (setq value (or (magit-todos--choose-scanner)
-                           (error "magit-todos: Unable to find rg, ag, or a git-grep or grep command that supports the --perl-regexp option"))))
-         (set-default option value)))
+         (when magit-todos-scanners
+           ;; Only try to set when scanners are defined.
+           (unless value
+             ;; Choosing automatically
+             (setq value (or (magit-todos--choose-scanner)
+                             (message "magit-todos: Unable to find rg, ag, or a git-grep or grep command that supports the --perl-regexp option"))))
+           (set-default option value))))
 
 (magit-todos-defscanner "git grep"
   :test (not (string-match "Perl-compatible"
@@ -766,16 +778,6 @@ This is a copy of `async-start-process' that does not override
 (magit-define-section-jumper magit-jump-to-todos "TODOs" todos)
 
 ;;;; Customization
-
-(defun magit-todos--choose-scanner ()
-  "Return function to call to scan for items with.
-Chooses automatically in order defined in `magit-todos-scanners'."
-  ;; NOTE: This needs to be defined before the `defcustom' that uses it.
-  (--first
-   ;; I guess it would be better to avoid `eval', but it seems like the natural way to do this.
-   (when (eval (a-get it 'test))
-     (a-get it 'function))
-   magit-todos-scanners))
 
 (defcustom magit-todos-fontify-keyword-headers t
   "Apply keyword faces to group keyword headers."
