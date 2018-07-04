@@ -142,6 +142,14 @@ Set automatically depending on grouping.")
   "Show TODO items in source code comments in repos' files."
   :group 'magit)
 
+(defun magit-todos--add-to-custom-type (symbol value)
+  "Add VALUE to the end of SYMBOL's `custom-type' property."
+  (declare (indent defun))
+  (pcase-let* ((`(,type . ,choices) (get symbol 'custom-type))
+               (choices (append choices (list value))))
+    (put symbol 'custom-type
+         (list type choices))))
+
 (cl-defmacro magit-todos-defscanner (name &key test command args results-regexp)
   (declare (indent defun))
   "FIXME docstring"
@@ -260,14 +268,6 @@ find-grep, in that order. "
                while item
                collect item
                do (forward-line 1)))))
-
-(defun magit-todos--add-to-custom-type (symbol value)
-  "Add VALUE to the end of SYMBOL's `custom-type' property."
-  (declare (indent defun))
-  (pcase-let* ((`(,type . ,choices) (get symbol 'custom-type))
-               (choices (append choices (list value))))
-    (put symbol 'custom-type
-         (list type choices))))
 
 (defun magit-todos--item-buffer (item)
   "Return buffer visiting ITEM."
